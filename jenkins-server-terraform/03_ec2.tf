@@ -1,4 +1,14 @@
+# Generate a new private key (you can also move this to keypair.tf later if modularizing)
+resource "tls_private_key" "ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
 
+# Create a new key pair in AWS using the public part of the above key
+resource "aws_key_pair" "devsecops_key" {
+  key_name   = "devsecops-project"
+  public_key = tls_private_key.ssh_key.public_key_openssh
+}
 
 # AWS EC2 instance resource definition
 resource "aws_instance" "ec2" {
@@ -9,7 +19,8 @@ resource "aws_instance" "ec2" {
   instance_type          = var.instance_type  # parameterized for flexibility
   
   # The key pair name for SSH access to the instance
-  key_name               = var.key_name
+   key_name               = aws_key_pair.devsecops_key.key_name
+  
   
   # Subnet ID where the EC2 instance will be launched (usually public subnet)
   subnet_id              = aws_subnet.public-subnet.id
@@ -24,6 +35,8 @@ resource "aws_instance" "ec2" {
   root_block_device {
     volume_size = 30
   }
+
+  
   
   # User data script executed on instance launch
   user_data = templatefile("./scripts/tools-install.sh", {})
@@ -41,4 +54,9 @@ output "instance_id" {
 
 output "instance_public_ip" {
   value = aws_instance.ec2.public_ip
+}
+
+output "private_key_pem" {
+  value     = tls_private_key.ssh_key.private_key_pem
+  sensitive = true
 }
